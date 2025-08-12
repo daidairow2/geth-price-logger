@@ -1,0 +1,27 @@
+name: gETH midrate daily
+
+on:
+  schedule:
+    # JST 09:00 = UTC 00:00
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Run logger (single shot)
+        run: node index.mjs --interval 0 --out data/geth_mid.csv
+        env:
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+      - name: Upload CSV as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: geth_mid_${{ github.run_id }}
+          path: data/geth_mid.csv
+          retention-days: 30
