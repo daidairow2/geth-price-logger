@@ -67,6 +67,9 @@ async function fetchOnce() {
     parseFloat(ethers.formatUnits(nav, aDec)) /
     parseFloat(ethers.formatUnits(totalSupply, vDec));  // WETH per 1 gETH
 
+const mid = price_nav; // 互換のために別名を用意
+
+
   // ---- 見積りレート（mint/redeem）: Vaultのpreview系 ----
   const sharesFor1Weth = await vault.previewDeposit(ethers.parseUnits("1", aDec));
   const assetsFor1Share = await vault.previewWithdraw(ethers.parseUnits("1", vDec));
