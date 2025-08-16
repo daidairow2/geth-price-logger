@@ -98,6 +98,20 @@ async function fetchOnce() {
   ].join(",");
   appendFileSync(outPath, row + "\n", "utf8");
 
+// 既にある previewDeposit の戻り値から
+const gethPer1WETH_preview = parseFloat(ethers.formatUnits(sharesFor1Weth, vDec));
+// NAVから逆算した gETH/WETH
+const gethPer1WETH_fromNav = 1 / mid;
+// 乖離(bps)
+const gap_bps = (gethPer1WETH_preview / gethPer1WETH_fromNav - 1) * 1e4;
+
+console.log(
+  `UI-style: ${gethPer1WETH_preview.toFixed(6)} gETH/WETH | `
++ `NAV-implied: ${gethPer1WETH_fromNav.toFixed(6)} gETH/WETH | `
++ `gap: ${gap_bps.toFixed(1)} bps`
+);
+
+
   console.log(
     `${ts.toISOString()}  NAV=${price_nav.toFixed(8)} WETH/gETH  (mint ${mint_q.toFixed(6)} / redeem ${redeem_q.toFixed(6)})`
   );
