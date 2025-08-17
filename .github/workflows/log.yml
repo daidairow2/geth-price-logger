@@ -13,13 +13,18 @@ jobs:
   log:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # push するので履歴を取得
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - run: npm install
+      - name: Install deps
+        run: npm install
 
       - name: Run logger (single shot)
         run: node index.mjs --interval 0 --out data/geth_mid.csv
@@ -27,19 +32,6 @@ jobs:
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
 
       - name: Append to monthly CSV
-      - name: Commit monthly CSV
-        run: |
-          set -e
-          BRANCH="${GITHUB_REF_NAME:-main}"
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "$BRANCH" --depth=1 || true
-          git pull --rebase origin "$BRANCH"   || true
-          git add data/geth_mid_*.csv
-          git commit -m "append: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" || echo "no changes"
-          git push origin "$BRANCH"
-
-      
         run: |
           set -e
           month=$(date -u +"%Y-%m")
@@ -49,6 +41,19 @@ jobs:
           else
             tail -n +2 data/geth_mid.csv >> "data/geth_mid_${month}.csv"
           fi
+
+      # ▼ これで CSV をリポジトリに永続化（グラフが日をまたいで伸びる）
+      - name: Commit monthly CSV
+        run: |
+          set -e
+          BRANCH="${GITHUB_REF_NAME:-main}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch "$BRANCH" || git checkout -B "$BRANCH"
+          git pull --rebase origin "$BRANCH" || true
+          git add data/geth_mid_*.csv
+          git commit -m "append: $(date -u +%FT%TZ)" || echo "no changes"
+          git push origin "$BRANCH"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -74,56 +79,5 @@ jobs:
           df['timestamp_iso'] = pd.to_datetime(df['timestamp_iso'])
           df = df.sort_values('timestamp_iso')
 
-          # 1) NAV (WETH per gETH) —— オフセット&科学表記OFF
-          fig, ax = plt.subplots(figsize=(8,4))
-          y = df['weth_per_geth_mid']
-          ax.plot(df['timestamp_iso'], y)
-          ax.set_title('gETH NAV (WETH per gETH)')
-          ax.set_xlabel('time'); ax.set_ylabel('WETH/gETH'); ax.grid(True, alpha=0.3)
-
-          fmt = ScalarFormatter(useOffset=False, useMathText=False)
-          fmt.set_scientific(False)
-          ax.yaxis.set_major_formatter(fmt)
-
-          lo, hi = y.min(), y.max()
-          pad = max((hi - lo) * 3, 0.0005)
-          ax.set_ylim(max(0.9, lo - pad), min(1.1, hi + pad))
-
-          fig.tight_layout(); fig.savefig('charts/geth_nav.png', dpi=160)
-
-          # 2) Premium vs ETH (%)
-          prem = (1.0 / y - 1.0) * 100.0
-          fig, ax = plt.subplots(figsize=(8,4))
-          ax.plot(df['timestamp_iso'], prem)
-          ax.set_title('gETH Premium vs ETH (%)')
-          ax.set_xlabel('time'); ax.set_ylabel('%')
-          ax.axhline(0, linestyle='--', linewidth=1)
-          ax.grid(True, alpha=0.3)
-          fig.tight_layout(); fig.savefig('charts/geth_premium.png', dpi=160)
-
-          # 3) gETH / WETH（直感用）
-          ratio = 1.0 / y
-          fig, ax = plt.subplots(figsize=(8,4))
-          ax.plot(df['timestamp_iso'], ratio)
-          ax.set_title('gETH / WETH')
-          ax.set_xlabel('time'); ax.set_ylabel('gETH/WETH'); ax.grid(True, alpha=0.3)
-
-          fmt2 = ScalarFormatter(useOffset=False, useMathText=False)
-          fmt2.set_scientific(False)
-          ax.yaxis.set_major_formatter(fmt2)
-
-          rlo, rhi = ratio.min(), ratio.max()
-          rpad = max((rhi - rlo) * 3, 0.0005)
-          ax.set_ylim(max(0.95, rlo - rpad), min(1.05, rhi + rpad))
-
-          fig.tight_layout(); fig.savefig('charts/geth_ratio.png', dpi=160)
-          PY
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: charts_${{ github.run_id }}
-          path: |
-            data/geth_mid_*.csv
-            charts/*.png
-          retention-days: 30
+          # 1) NAV (WETH per gETH) —— オフセット/科学表記OFF
+          fig, ax = plt.subplo
