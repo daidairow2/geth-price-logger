@@ -5,7 +5,7 @@ permissions:
 
 on:
   schedule:
-    # JST 09:00 = UTC 00:00（必要に応じて変更）
+    # JST 09:00 = UTC 00:00
     - cron: "0 0 * * *"
   workflow_dispatch:
 
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # pushするので履歴が要る
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -90,5 +90,39 @@ jobs:
           ax.yaxis.set_major_formatter(fmt)
           lo, hi = y.min(), y.max()
           pad = max((hi - lo) * 3, 0.0005)
+          ax.set_ylim(max(0.9, lo - pad), min(1.1, hi + pad))
+          fig.tight_layout(); fig.savefig('charts/geth_nav.png', dpi=160)
 
-::contentReference[oaicite:0]{index=0}
+          # 2) Premium vs ETH (%) = (1/NAV - 1) * 100
+          prem = (1.0 / y - 1.0) * 100.0
+          fig, ax = plt.subplots(figsize=(8,4))
+          ax.plot(df['timestamp_iso'], prem)
+          ax.set_title('gETH Premium vs ETH (%)')
+          ax.set_xlabel('time'); ax.set_ylabel('%')
+          ax.axhline(0, linestyle='--', linewidth=1)
+          ax.grid(True, alpha=0.3)
+          fig.tight_layout(); fig.savefig('charts/geth_premium.png', dpi=160)
+
+          # 3) gETH / WETH（直感用）
+          ratio = 1.0 / y
+          fig, ax = plt.subplots(figsize=(8,4))
+          ax.plot(df['timestamp_iso'], ratio)
+          ax.set_title('gETH / WETH')
+          ax.set_xlabel('time'); ax.set_ylabel('gETH/WETH'); ax.grid(True, alpha=0.3)
+          fmt2 = ScalarFormatter(useOffset=False, useMathText=False)
+          fmt2.set_scientific(False)
+          ax.yaxis.set_major_formatter(fmt2)
+          rlo, rhi = ratio.min(), ratio.max()
+          rpad = max((rhi - rlo) * 3, 0.0005)
+          ax.set_ylim(max(0.95, rlo - rpad), min(1.05, rhi + rpad))
+          fig.tight_layout(); fig.savefig('charts/geth_ratio.png', dpi=160)
+PY
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: charts_${{ github.run_id }}
+          path: |
+            data/geth_mid_*.csv
+            charts/*.png
+          retention-days: 30
