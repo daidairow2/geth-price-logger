@@ -11,17 +11,84 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - run: npm install
+
       - name: Run logger (single shot)
         run: node index.mjs --interval 0 --out data/geth_mid.csv
         env:
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
-      - name: Upload CSV as artifact
+
+      # ★ 月次CSVに追記（履歴を1つのファイルに貯める）
+      - name: Append to monthly CSV
+        run: |
+          set -e
+          month=$(date -u +"%Y-%m")
+          mkdir -p data
+          if [ ! -f "data/geth_mid_${month}.csv" ]; then
+            cp data/geth_mid.csv "data/geth_mid_${month}.csv"
+          else
+            tail -n +2 data/geth_mid.csv >> "data/geth_mid_${month}.csv"
+          fi
+
+      # ★ Pythonでグラフ生成
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: pip install pandas matplotlib
+
+      - name: Make charts
+        run: |
+          python - <<'PY'
+          import glob, pandas as pd, matplotlib.pyplot as plt, os
+          os.makedirs("charts", exist_ok=True)
+          files = sorted(glob.glob("data/geth_mid_*.csv"))
+          if not files:
+            raise SystemExit("no monthly csvs found")
+          df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+          df['timestamp_iso'] = pd.to_datetime(df['timestamp_iso'])
+          df = df.sort_values('timestamp_iso')
+
+          # 1) NAVの推移（WETH/gETH）
+          plt.figure(figsize=(8,4))
+          plt.plot(df['timestamp_iso'], df['weth_per_geth_mid'])
+          plt.title('gETH NAV (WETH per gETH)')
+          plt.xlabel('time'); plt.ylabel('WETH/gETH')
+          plt.grid(True, alpha=0.3)
+          plt.tight_layout(); plt.savefig('charts/geth_nav.png', dpi=160)
+
+          # 2) 剥離（Premium vs ETH, %） = (1/NAV - 1)*100
+          prem = (1/df['weth_per_geth_mid'] - 1.0) * 100.0
+          plt.figure(figsize=(8,4))
+          plt.plot(df['timestamp_iso'], prem)
+          plt.title('gETH Premium vs ETH (%)')
+          plt.xlabel('time'); plt.ylabel('%')
+          plt.axhline(0, linestyle='--', linewidth=1)
+          plt.grid(True, alpha=0.3)
+          plt.tight_layout(); plt.savefig('charts/geth_premium.png', dpi=160)
+          PY
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: geth_mid_${{ github.run_id }}
-          path: data/geth_mid.csv
+          name: charts_${{ github.run_id }}
+          path: |
+            data/geth_mid_*.csv
+            charts/*.png
           retention-days: 30
+
+      # （任意）PNGと月次CSVをレポジトリにも残したい場合はこのブロックを有効化
+      - name: Commit monthly CSV and charts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/geth_mid_*.csv charts/*.png || true
+          git commit -m "update: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" || echo "no changes"
+          git push
