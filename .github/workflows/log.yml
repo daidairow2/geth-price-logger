@@ -5,7 +5,7 @@ permissions:
 
 on:
   schedule:
-    # JST 09:00 = UTC 00:00
+    # JST 09:00 = UTC 00:00（必要に応じて変更）
     - cron: "0 0 * * *"
   workflow_dispatch:
 
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0        # push するので履歴を取得
+          fetch-depth: 0  # pushするので履歴が要る
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -42,7 +42,6 @@ jobs:
             tail -n +2 data/geth_mid.csv >> "data/geth_mid_${month}.csv"
           fi
 
-      # ▼ これで CSV をリポジトリに永続化（グラフが日をまたいで伸びる）
       - name: Commit monthly CSV
         run: |
           set -e
@@ -66,18 +65,30 @@ jobs:
       - name: Make charts
         run: |
           python - <<'PY'
-          import glob, pandas as pd, matplotlib.pyplot as plt
+          import glob, os
+          import pandas as pd
+          import matplotlib.pyplot as plt
           from matplotlib.ticker import ScalarFormatter
-          import os
-          os.makedirs("charts", exist_ok=True)
 
+          os.makedirs("charts", exist_ok=True)
           files = sorted(glob.glob("data/geth_mid_*.csv"))
           if not files:
-            raise SystemExit("no monthly csvs found")
+              raise SystemExit("no monthly csvs found")
 
           df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
           df['timestamp_iso'] = pd.to_datetime(df['timestamp_iso'])
           df = df.sort_values('timestamp_iso')
 
-          # 1) NAV (WETH per gETH) —— オフセット/科学表記OFF
-          fig, ax = plt.subplo
+          # 1) NAV (WETH per gETH)
+          fig, ax = plt.subplots(figsize=(8,4))
+          y = df['weth_per_geth_mid']
+          ax.plot(df['timestamp_iso'], y)
+          ax.set_title('gETH NAV (WETH per gETH)')
+          ax.set_xlabel('time'); ax.set_ylabel('WETH/gETH'); ax.grid(True, alpha=0.3)
+          fmt = ScalarFormatter(useOffset=False, useMathText=False)
+          fmt.set_scientific(False)
+          ax.yaxis.set_major_formatter(fmt)
+          lo, hi = y.min(), y.max()
+          pad = max((hi - lo) * 3, 0.0005)
+
+::contentReference[oaicite:0]{index=0}
