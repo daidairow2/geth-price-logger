@@ -27,6 +27,19 @@ jobs:
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
 
       - name: Append to monthly CSV
+      - name: Commit monthly CSV
+        run: |
+          set -e
+          BRANCH="${GITHUB_REF_NAME:-main}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BRANCH" --depth=1 || true
+          git pull --rebase origin "$BRANCH"   || true
+          git add data/geth_mid_*.csv
+          git commit -m "append: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" || echo "no changes"
+          git push origin "$BRANCH"
+
+      
         run: |
           set -e
           month=$(date -u +"%Y-%m")
