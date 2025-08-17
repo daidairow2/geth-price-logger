@@ -1,5 +1,8 @@
 name: gETH midrate daily
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # JST 09:00 = UTC 00:00
